@@ -20,7 +20,7 @@ model User {
   email           String  @unique
   profileImageUrl String?
   password String
-
+  isVerified  Boolean  @default(false)
   items           ItemUser[]
 
   createdAt DateTime @default(now())

@@ -13,7 +13,12 @@ router.get("/currentuser", async(req,res)=>{
     const user = await prismaClient.user.findUnique({
         where:{email: currentUser?.email}
     })
-    res.json(user);
+    if(!user?.isVerified){
+      res.status(400).json({message: "User Email is not verified"})
+    }else{
+        res.status(200).json(user);
+    }
+    
 })
 
 router.get("/cart", async(req,res)=>{

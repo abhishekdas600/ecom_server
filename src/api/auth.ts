@@ -2,6 +2,8 @@ import express, { Router } from "express";
 import { prismaClient } from "../db";
 import Encryption from "./authentication/bcrypt";
 import JWTService from "./authentication/jwt";
+import NodemailService from "./authentication/nodemailer";
+
 
 const router = express.Router()
 
@@ -16,16 +18,21 @@ router.post("/signup", async(req,res)=>{
             }
         })
         if(!user){
-            const newUser = await prismaClient.user.create({
-                data:{
-                    firstName: req.body.firstName,
-                    lastName: req.body.lastName,
-                    email: req.body.email,
-                    password: await Encryption.hashPassword(req.body.password)
-                }
-            })
-            const token = JWTService.generateTokenForUser(newUser);
-            res.json(token);
+           const newUser = await prismaClient.user.create({
+                    data:{
+                        firstName: req.body.firstName,
+                        lastName: req.body.lastName,
+                        email: req.body.email,
+                        password: await Encryption.hashPassword(req.body.password)
+                    }
+                })
+            //     const token = JWTService.generateTokenForUser(newUser);
+            // res.json(token);
+           await NodemailService.sendEmail(newUser.email);
+
+            res.json(newUser);
+            
+            
         }
        else{
         res.status(400).json({message:"Email already Used"});
@@ -48,6 +55,9 @@ router.post("/login", async(req,res)=>{
            })
            if(!user || !await Encryption.comparePasswords(req.body.password, user.password) ) {
             res.status(400).json({message: "User not found"})
+           }
+           else if(!user.isVerified){
+            res.status(400).json({message:"Please Confirm Your Email"});
            }
            else{
             const token = JWTService.generateTokenForUser(user);
