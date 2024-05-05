@@ -8,6 +8,8 @@ import userRouter from "./api/user";
 import itemRouter from "./api/item";
 import * as dotenv from "dotenv";
 import { prismaClient } from "./db";
+import Encryption from "./api/authentication/bcrypt";
+
 const app = express();
 const port = 8000;
 
@@ -31,7 +33,7 @@ app.get("/", (req,res)=>{
 
 app.get("/confirmation/:token", async (req, res) => {
   const emailToken = req.params.token;
-  const email = await JWTService.decodeTokenForEmail(emailToken) as JWTEmail;
+  const email = JWTService.decodeTokenForEmail(emailToken) as JWTEmail;
 
   if (email) {
       const currentUser = await prismaClient.user.findUnique({
@@ -46,10 +48,10 @@ app.get("/confirmation/:token", async (req, res) => {
           });
 
          
-          const token = await JWTService.generateTokenForUser(currentUser);
+          const token = JWTService.generateTokenForUser(currentUser);
 
           
-          res.status(200).json({ token: token, message: "Email Verified" });
+          res.status(200).redirect(`http://localhost:3000/confirmation/${token}`)
       } else {
           res.status(400).json({ message: `User not found for ${email}` });
       }
@@ -57,15 +59,39 @@ app.get("/confirmation/:token", async (req, res) => {
       res.status(404).json({ message: "Email Token Invalid" });
   }
 });
+
+app.get("/resetpassword/:token", async(req,res)=>{
+  const token = req.params.token;
+  const userEmail =  JWTService.decodeTokenForEmail(token);
+
+  if(userEmail){
+    const user = await prismaClient.user.findUnique({
+      where:{email: userEmail.email}
+    })
+   if(user){
+    
+    res.status(200).redirect(`http://localhost:3000/resetpassword/${token}`)
+    
+   }else{
+    res.status(404).json({message: "User not found"});
+   }
+   
+  }else{
+    res.status(400).json({message: "Email not found"})
+  }
+  
+})
+
 const jwtMiddleware = (req: Request, res: Response, next: NextFunction) => {
    
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
     
       const token = req.headers.authorization.split('Bearer ')[1];
-
+      
      const user = JWTService.decodeToken(token);
       req.context ={
         user : user as JWTUser,
+        
       }
       next();
     }

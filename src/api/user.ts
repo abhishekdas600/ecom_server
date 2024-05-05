@@ -4,22 +4,31 @@ import { JWTUser } from "../interfaces";
 
 const router = express.Router();
 
-router.get("/currentuser", async(req,res)=>{
+router.get("/currentuser", async (req, res) => {
     const currentUser = req.context.user;
 
-    if(!currentUser){
-        res.status(400).json({message: "User not found"})
+    if (!currentUser) {
+        return res.status(400).json({ message: "User not found" });
     }
-    const user = await prismaClient.user.findUnique({
-        where:{email: currentUser?.email}
-    })
-    if(!user?.isVerified){
-      res.status(400).json({message: "User Email is not verified"})
-    }else{
-        res.status(200).json(user);
+
+    try {
+        const user = await prismaClient.user.findUnique({
+            where: { id: currentUser.id }
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.isVerified) {
+            return res.status(400).json({ message: "User email is not verified" });
+        }
+
+        return res.status(200).json(user);
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error" });
     }
-    
-})
+});
 
 router.get("/cart", async(req,res)=>{
    const currentUser = req.context.user;
@@ -43,22 +52,16 @@ router.post("/add_to_cart", async(req,res)=>{
             where: { id: req.body.itemId },
             select: {id:true, itemQuantity: true }
         });
-
-        if (!item) {
+       if (!item) {
             return res.status(404).json({ message: "Item not found" });
-        }
-
-       
+        }       
         if (item.itemQuantity < req.body.quantity) {
             return res.status(400).json({ message: "Not enough quantity in stock" });
-        }
-
-        
+        }        
         await prismaClient.item.update({
             where: { id: req.body.itemId },
             data: { itemQuantity: { decrement: req.body.quantity } }
         });
-
         await prismaClient.itemUser.create({
             data: {
                 userId: currentUser.id,
@@ -105,6 +108,30 @@ router.delete("/remove_from_cart", async(req,res)=>{
     }
     
  }
+})
+
+router.post("/update_profile", async(req,res)=>{
+    const currentUser = req.context.user;
+    if(!currentUser){
+        res.status(400).json({message: "No user found"})
+    }
+    try{
+        const updatedUser = await prismaClient.user.update({
+            where:{id: currentUser?.id},
+            data:{
+               firstName: req.body.firstName,
+               lastName: req.body.lastName,
+               profileImageUrl: req.body.profileImageUrl
+            }
+        })
+        res.status(200).json(updatedUser);
+    }
+    catch(error){
+      res.status(404).json({error: error, message:"Update failed"});
+    }
+    
+    
+    
 })
 
 export default router;

@@ -10,7 +10,7 @@ class JWTService {
         const payload: JWTUser= {
             id: user?.id,
             email: user?.email,
-            isVerified: user?.isVerified,
+            
         };
         const token = JWT.sign(payload, JWT_SECRET );
         return token;
