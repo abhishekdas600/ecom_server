@@ -4,32 +4,33 @@ import { JWTUser } from "../interfaces";
 
 const router = express.Router();
 
+
 router.get("/currentuser", async (req, res) => {
-    const currentUser = req.context.user;
-
-    if (!currentUser) {
-        return res.status(400).json({ message: "User not found" });
-    }
-
     try {
+        const currentUser = req.context.user;
+        
+        if (!currentUser) {
+            return res.status(400).json({message: "No User found"});
+        }
+
         const user = await prismaClient.user.findUnique({
-            where: { id: currentUser.id }
+            where: { id: currentUser?.id }
         });
 
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({ message: "User not found in DB" });
         }
 
         if (!user.isVerified) {
-            return res.status(400).json({ message: "User email is not verified" });
+            return res.status(403).json({ message: "User email is not verified" });
         }
 
         return res.status(200).json(user);
     } catch (error) {
+        console.error("Error fetching current user:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 });
-
 router.get("/cart", async(req,res)=>{
    const currentUser = req.context.user;
    if(!currentUser){
