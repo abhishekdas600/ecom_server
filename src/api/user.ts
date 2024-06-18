@@ -1,16 +1,18 @@
 import express from "express";
 import { prismaClient } from "../db";
-import { JWTUser } from "../interfaces";
+import { FakeItem, JWTUser } from "../interfaces";
+import axios from "axios";
+import { PrismaClientValidationError } from "@prisma/client/runtime/library";
+import {redisClient} from "../db/redis";
 
 const router = express.Router();
-
 
 router.get("/currentuser", async (req, res) => {
     try {
         const currentUser = req.context.user;
         
         if (!currentUser) {
-            return res.status(400).json({message: "No User found"});
+            return res.status(400).json({ message: "No User found" });
         }
 
         const user = await prismaClient.user.findUnique({
@@ -31,108 +33,200 @@ router.get("/currentuser", async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 });
-router.get("/cart", async(req,res)=>{
-   const currentUser = req.context.user;
-   if(!currentUser){
-    res.status(400).json({message: "User not found"})
-}
-   const result = await prismaClient.itemUser.findMany({
-    where:{userId: currentUser?.id},
-    include:{item: true}
-   })
-   res.json(result.map(el=> el.item));
-})
 
-router.post("/add_to_cart", async(req,res)=>{
+router.get("/cart", async (req, res) => {
     const currentUser = req.context.user;
-    if(!currentUser){
-     res.status(400).json({message: "User not found"})
- }else{
-    try {
-        const item = await prismaClient.item.findUnique({
-            where: { id: req.body.itemId },
-            select: {id:true, itemQuantity: true }
-        });
-       if (!item) {
-            return res.status(404).json({ message: "Item not found" });
-        }       
-        if (item.itemQuantity < req.body.quantity) {
-            return res.status(400).json({ message: "Not enough quantity in stock" });
-        }        
-        await prismaClient.item.update({
-            where: { id: req.body.itemId },
-            data: { itemQuantity: { decrement: req.body.quantity } }
-        });
-        await prismaClient.itemUser.create({
-            data: {
-                userId: currentUser.id,
-                itemId: req.body.itemId,
-                quantity: req.body.quantity
-            }
-        });
-        res.status(200).json({message: "Connected"})
-    } catch (error) {
-        console.error("Error creating item connection:", error);
-        res.status(500).json({ message: "Internal server error" });
+    if (!currentUser) {
+        return res.status(400).json({ message: "User not found" });
     }
- }
-    
-})
-router.delete("/remove_from_cart", async(req,res)=>{
-    const currentUser = req.context.user;
-    if(!currentUser){
-     res.status(400).json({message: "User not found"})
- }else{
-    try{
-        const item = await prismaClient.item.findUnique({
-            where:{id: req.body.itemId},
-            select:{itemQuantity: true}
+
+    try {
+        const cartKey = `cart:${currentUser.id}`;
+        const cartItems = await redisClient.hGetAll(cartKey);
+        
+        if (Object.keys(cartItems).length === 0) {
+            return res.status(200).json([]);
+        }
+        const itemIds = Object.keys(cartItems);
+
+        const itemFormDatabase = await prismaClient.item.findMany({
+            where:{
+                id:{
+                    in: itemIds
+                }
+            },
+            select:{
+                id: true,
+                title: true,
+                price: true,
+                image: true
+            }
         })
-        if(!item){
+
+        const parsedItems = itemFormDatabase.map(item =>({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            image: item.image,
+            quantity: cartItems[item.id]
+        }))
+       
+        return res.json(parsedItems);
+    } catch (error) {
+        console.error("Error fetching cart items:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+router.post("/addtocart", async (req, res) => {
+    const currentUser = req.context.user;
+    if (!currentUser) {
+        return res.status(400).json({ message: "User not found" });
+    }
+
+    try {
+        const itemId = req.body.itemId;
+        const quantity = req.body.quantity;
+        const item = await prismaClient.item.findUnique({
+            where: { id: itemId }
+        });
+
+        if (!item) {
             return res.status(404).json({ message: "Item not found" });
         }
-        const removedItem = await prismaClient.itemUser.delete({
-            where:{userId_itemId: {userId:currentUser.id, itemId:req.body.itemId}},
-            select:{quantity: true}
-        })
-      
-        await prismaClient.item.update({
-            where:{id: req.body.itemId},
-            data:{itemQuantity: {increment: removedItem.quantity}}
-        })
+         
+        const cartKey = `cart:${currentUser.id}`;
+        await redisClient.hIncrBy(cartKey, itemId, quantity);
 
-       res.status(200).json({message:"Removed from the cart"})
+        return res.status(200).json({ message: "Item added to cart" });
+    } catch (error) {
+        console.error("Error creating item connection:", error);
+        return res.status(500).json({ message: "Internal server error" });
     }
-    catch (error) {
-        console.error("Error deleting item connection:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
-    
- }
-})
+});
 
-router.post("/update_profile", async(req,res)=>{
+router.delete("/removefromcart/:itemId", async (req, res) => {
     const currentUser = req.context.user;
-    if(!currentUser){
-        res.status(400).json({message: "No user found"})
+    if (!currentUser) {
+        return res.status(400).json({ message: "User not found" });
     }
-    try{
+
+    try {
+        const itemId = req.params.itemId;
+
+        const item = await prismaClient.item.findUnique({
+            where: { id: itemId }
+        });
+
+        if (!item) {
+            return res.status(404).json({ message: "Item not found" });
+        }
+        const cartKey = `cart:${currentUser.id}`
+        await redisClient.hDel(cartKey, item.id);
+
+        return res.status(200).json({ message: "Removed from the cart" });
+    } catch (error) {
+        console.error("Error deleting item connection:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+router.post("/update_profile", async (req, res) => {
+    const currentUser = req.context.user;
+    if (!currentUser) {
+        return res.status(400).json({ message: "No user found" });
+    }
+
+    try {
         const updatedUser = await prismaClient.user.update({
-            where:{id: currentUser?.id},
-            data:{
-               firstName: req.body.firstName,
-               lastName: req.body.lastName,
-               profileImageUrl: req.body.profileImageUrl
+            where: { id: currentUser?.id },
+            data: {
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                profileImageUrl: req.body.profileImageUrl
             }
-        })
-        res.status(200).json(updatedUser);
+        });
+        return res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error("Error updating profile:", error);
+        return res.status(404).json({ error: error, message: "Update failed" });
     }
-    catch(error){
-      res.status(404).json({error: error, message:"Update failed"});
+});
+
+router.get("/addresses", async (req, res) => {
+    const currentUser = req.context.user;
+    if (!currentUser) {
+        return res.status(400).json({ message: "No user found" });
     }
-    
-    
-    
-})
+
+    try {
+        const result = await prismaClient.address.findMany({
+            where: { userId: currentUser?.id }
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error("Error fetching addresses:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+router.post("/createaddress", async (req, res) => {
+    const currentUser = req.context.user;
+    if (!currentUser) {
+        return res.status(400).json({ message: "No user found" });
+    }
+
+    const { addressLine, pincode, district, state, number } = req.body;
+
+    if (!addressLine || !pincode || !district || !state || !number) {
+        return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (isNaN(pincode) || isNaN(number)) {
+        return res.status(400).json({ message: "Invalid pincode or number" });
+    }
+
+    try {
+        const parsedPincode = parseInt(pincode);
+
+        await prismaClient.address.create({
+            data: {
+                addressLine,
+                pincode: parsedPincode,
+                district,
+                state,
+                number,
+                userId: currentUser?.id
+            }
+        });
+
+        return res.status(200).json({ message: "Address created successfully" });
+    } catch (error) {
+        console.error("Error creating address:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+router.delete("/deleteaddress/:id", async (req, res) => {
+    const currentUser = req.context.user;
+    if (!currentUser) {
+        return res.status(400).json({ message: "No user found" });
+    }
+
+    try {
+        const address = await prismaClient.address.delete({
+            where: { id: req.params.id }
+        });
+
+        if (!address) {
+            return res.status(404).json({ message: "Address not found" });
+        }
+
+        return res.status(200).json({ message: "Address deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting address:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
 
 export default router;

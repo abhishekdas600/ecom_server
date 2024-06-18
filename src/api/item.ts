@@ -37,13 +37,15 @@ const router = express.Router();
 
 router.get('/products', async(req,res)=>{
     try {
-        const products = await axios.get('https://fakestoreapi.com/products');
+        const products = await prismaClient.item.findMany({
+           
+        })
         if(!products){
-            res.status(404).json({message: "Products not found"})
+           return res.status(404).json({message: "Products not found"})
         }
-        res.status(200).json(products.data);
+       return res.status(200).json(products);
     } catch (error) {
-        res.status(400).json(error);
+       return res.status(400).json(error);
     }
 
 })
@@ -52,17 +54,21 @@ router.get('/productsById/:id', async(req,res)=>{
      try {
        const id = req.params.id
        if(!id){
-        res.status(404).json({message: "ID not found"})
+       return res.status(404).json({message: "ID not found"})
        }
-        const item = await axios.get(`https://fakestoreapi.com/products/${id}`)
-        res.status(200).json(item.data);
+        const item = await prismaClient.item.findUnique({
+            where:{id: id}
+        })
+       
         if(!item){
-            res.status(400).json({message: "Item of this ID not found"})
+           return res.status(400).json({message: "Item of this ID not found"})
         }
+          return  res.status(200).json(item);
      } catch (error) {
-        res.status(400).json(error);
+       return res.status(400).json(error);
      }
 })
+
 
 
 export default router;

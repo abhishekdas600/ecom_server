@@ -1,8 +1,8 @@
 import express, { Router } from "express";
 import { prismaClient } from "../db";
-import Encryption from "./authentication/bcrypt";
-import JWTService from "./authentication/jwt";
-import NodemailService from "./authentication/nodemailer";
+import Encryption from "./services/bcrypt";
+import JWTService from "./services/jwt";
+import NodemailService from "./services/nodemailer";
 
 
 const router = express.Router()
@@ -12,49 +12,48 @@ function isValidEmail(email: string) {
     return emailRegex.test(email);
 }
 
-router.post("/signup", async(req,res)=>{
-    const currentUser = req.context.user;
-    if(!currentUser){
+router.post("/signup", async (req, res) => {
+    try {
+        const currentUser = req.context.user;
+
+        if (currentUser) {
+            return res.status(400).json({ message: `Already logged in as ${currentUser.email}` });
+        }
+
         const email = req.body.email;
-        if(!isValidEmail(email)){
+
+        if (!isValidEmail(email)) {
             console.error("Invalid email address provided:", email);
-                return res.status(400).json({ message: "Invalid email address" });
+            return res.status(400).json({ message: "Invalid email address" });
         }
+
         const user = await prismaClient.user.findUnique({
-            where:{
-                email: req.body.email,
-            }
-         
-            
-        })
-        
-        if(!user){
-           const newUser = await prismaClient.user.create({
-                    data:{
-                        firstName: req.body.firstName,
-                        lastName: req.body.lastName,
-                        email: req.body.email,
-                        password: await Encryption.hashPassword(req.body.password)
-                    }
-                   
-                })
-                
-           await NodemailService.sendEmail(newUser.email);
+            where: { email: req.body.email }
+        });
 
-            
-            
-            
+        if (user) {
+            return res.status(400).json({ message: "Email already used" });
         }
-       else{
-        res.status(400).json({message:"Email already Used"});
-       }
-    }
-    else{
-        res.status(400).json({message: `Already logged as ${currentUser.email}`})
-    }
-   
-})
 
+        const newUser = await prismaClient.user.create({
+            data: {
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                email: req.body.email,
+                password: await Encryption.hashPassword(req.body.password)
+            }
+        });
+
+        await NodemailService.sendEmail(newUser.email);
+        return res.status(201).json({ message: "User created successfully" });
+
+    } catch (error) {
+        console.error("Error during signup:", error);
+        if (!res.headersSent) {
+            return res.status(500).json({ message: "Internal Server Error" });
+        }
+    }
+});
 router.post("/login", async(req,res)=>{
     const currentUser = req.context.user;
     if(!currentUser){

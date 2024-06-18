@@ -12,3 +12,11 @@ export interface JWTEmail{
     email: string
 }
 
+export interface FakeItem {
+    id: string,
+    title: string,
+    description: string,
+    category: string,
+    image: string,
+    price: number
+}
