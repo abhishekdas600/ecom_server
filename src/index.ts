@@ -44,21 +44,73 @@ app.use(bodyParser.json({
   req.rawBody = buf.toString()
   }
   }}));
+  app.use(cors());
+
+  app.get("/", (req,res)=>{
+    res.status(200).json({messsage:"ok"});
+})
+
+app.get("/confirmation/:token", async (req, res) => {
+  const emailToken = req.params.token;
+  const email = JWTService.decodeTokenForEmail(emailToken) as JWTEmail;
+
+  if (email) {
+      const currentUser = await prismaClient.user.findUnique({
+          where: { email: email.email}
+      });
+
+      if (currentUser) {
+
+          await prismaClient.user.update({
+              where: { id: currentUser.id },
+              data: { isVerified: true }
+          });
 
 
+          const token = JWTService.generateTokenForUser(currentUser);
 
 
-
-
-
-
-
-
-app.use(cors());
-
-app.get("/", (req, res) => {
-  res.status(200).json({ message: "ok" });
+          res.status(200).redirect(`http://localhost:3000/confirmation/${token}`)
+      } else {
+          res.status(400).json({ message: `User not found for ${email}` });
+      }
+  } else {
+      res.status(404).json({ message: "Email Token Invalid" });
+  }
 });
+
+app.get("/resetpassword/:token", async(req,res)=>{
+  const token = req.params.token;
+  const userEmail =  JWTService.decodeTokenForEmail(token);
+
+  if(userEmail){
+    const user = await prismaClient.user.findUnique({
+      where:{email: userEmail.email}
+    })
+   if(user){
+
+    res.status(200).redirect(`http://localhost:3000/resetpassword/${token}`)
+
+   }else{
+    res.status(404).json({message: "User not found"});
+   }
+
+  }else{
+    res.status(400).json({message: "Email not found"})
+  }
+
+})
+
+
+
+
+
+
+
+
+
+
+
 
 
 
