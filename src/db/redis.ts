@@ -4,6 +4,6 @@ import {createClient} from "redis";
 
 redisClient.on('error', (err) => console.log('Redis Client Error', err));
 
-redisClient.connect();
+
 
 
