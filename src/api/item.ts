@@ -69,6 +69,24 @@ router.get('/productsById/:id', async(req,res)=>{
      }
 })
 
+router.get("/prev-orders", async(req,res)=>{
+   const currentUser = req.context.user;
+   if(!currentUser){
+      return res.status(400).json({ message: "No User found" })
+   }
+   try {
+      const prevOrders = await prismaClient.itemUser.findMany({
+         where:{userId: currentUser.id},
+        select:{
+         item: true
+        }
+      })
+      return res.status(200).json(prevOrders)
+   } catch (error) {
+      return res.status(400).json(error)
+   }
+})
+
 
 
 export default router;

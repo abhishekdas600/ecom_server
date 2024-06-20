@@ -4,6 +4,7 @@ import bodyParser from "body-parser";
 
 import { redisClient } from "../db/redis";
 import { prismaClient } from "../db";
+import { RequestWithRawBody } from "..";
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 
 
-router.post("/webhook", express.raw({type: 'application/json'}), async (req, res) => {
+router.post("/webhook", async (req: RequestWithRawBody, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -26,8 +27,7 @@ router.post("/webhook", express.raw({type: 'application/json'}), async (req, res
 
     try {
         console.log('Request Headers:', req.headers);
-        console.log('Raw Body:', req.body); 
-        event = stripe.webhooks.constructEvent(req.body , sig as string, webhookSecret);
+        event = stripe.webhooks.constructEvent(req.rawBody as string , sig as string, webhookSecret);
         
     } catch (error) {
         console.error(`Webhook signature verification failed. Error: ${error}`);
@@ -50,9 +50,28 @@ router.post("/webhook", express.raw({type: 'application/json'}), async (req, res
                 quantity: parseInt(cartItems[itemId], 10),
             }));
 
-            await prismaClient.itemUser.createMany({
-                data: itemUserEntries,
-            });
+            await Promise.all(itemUserEntries.map(entry =>
+                prismaClient.itemUser.upsert({
+                    where: {
+                        userId_itemId_addressId: {
+                            userId: entry.userId,
+                            itemId: entry.itemId,
+                            addressId: entry.addressId,
+                        },
+                    },
+                    update: {
+                        quantity: {
+                            increment: entry.quantity,
+                        },
+                    },
+                    create: {
+                        userId: entry.userId,
+                        itemId: entry.itemId,
+                        addressId: entry.addressId,
+                        quantity: entry.quantity,
+                    },
+                })
+            ));
 
             await redisClient.del(cartKey);
 

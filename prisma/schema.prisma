@@ -50,7 +50,7 @@ model ItemUser {
   quantity  Int      
   address   Address @relation(fields: [addressId], references: [id])
   addressId  String
-  @@id([userId, itemId])      
+  @@id([userId, itemId, addressId])      
 }
 
 model Address {

@@ -30,11 +30,30 @@ declare global {
   }
 }
 
+export interface RequestWithRawBody extends Request {
+  rawBody?: string;
+}
 
 
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({
+  
+  verify: function(req: RequestWithRawBody, res: Response, buf: Buffer) {
+  var url = req.originalUrl;
+  if (url.startsWith('/api/stripe/webhook')) {
+  req.rawBody = buf.toString()
+  }
+  }}));
+
+
+
+
+
+
+
+
+
+
 app.use(cors());
 
 app.get("/", (req, res) => {
