@@ -41,7 +41,7 @@ router.post("/webhook", async (req: RequestWithRawBody, res) => {
 
         try {
             const cartKey = `cart:${session.metadata?.userId}`;
-            const cartItems = await redisClient.hGetAll(cartKey);
+            const cartItems = await redisClient.hgetall(cartKey);
 
             const itemUserEntries = Object.keys(cartItems).map(itemId => ({
                 userId: session.metadata?.userId as string,
@@ -95,7 +95,7 @@ router.post("/payment-session", async (req, res) => {
 
     try {
         const cartKey = `cart:${currentUser.id}`;
-        const cartItems = await redisClient.hGetAll(cartKey);
+        const cartItems = await redisClient.hgetall(cartKey);
         if (Object.keys(cartItems).length === 0) {
             return res.status(200).json({ message: "Cart is empty" });
         }

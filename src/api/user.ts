@@ -42,7 +42,7 @@ router.get("/cart", async (req, res) => {
 
     try {
         const cartKey = `cart:${currentUser.id}`;
-        const cartItems = await redisClient.hGetAll(cartKey);
+        const cartItems = await redisClient.hgetall(cartKey);
         
         if (Object.keys(cartItems).length === 0) {
             return res.status(200).json([]);
@@ -96,7 +96,7 @@ router.post("/addtocart", async (req, res) => {
         }
          
         const cartKey = `cart:${currentUser.id}`;
-        await redisClient.hIncrBy(cartKey, itemId, quantity);
+        await redisClient.hincrby(cartKey, itemId, quantity);
 
         return res.status(200).json({ message: "Item added to cart" });
     } catch (error) {
@@ -122,7 +122,7 @@ router.delete("/removefromcart/:itemId", async (req, res) => {
             return res.status(404).json({ message: "Item not found" });
         }
         const cartKey = `cart:${currentUser.id}`
-        await redisClient.hDel(cartKey, item.id);
+        await redisClient.hdel(cartKey, item.id);
 
         return res.status(200).json({ message: "Removed from the cart" });
     } catch (error) {
