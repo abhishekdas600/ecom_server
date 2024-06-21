@@ -40,7 +40,7 @@ class NodemailService {
         try {
             const emailToken = JWTService.generateTokenForEmail(email);
             const url = `${process.env.AWS_URL as string}/resetpassword/${emailToken}`
-            console.log(url)
+            
 
             await transporter.sendMail({
                 to: email,
@@ -49,6 +49,7 @@ class NodemailService {
             });
 
             console.log("Reset Email sent successfully")
+            console.log(url)
         } catch (error) {
             console.error('Error sending email:', error);
             throw new Error('Failed to send email');
