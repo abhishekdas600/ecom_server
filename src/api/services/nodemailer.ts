@@ -19,7 +19,7 @@ class NodemailService {
 
         try {
             const emailToken = JWTService.generateTokenForEmail(email); 
-            const url = `http://localhost:8000/confirmation/${emailToken}`;
+            const url = `${process.env.AWS_URL}/confirmation/${emailToken}`;
 
             
             await transporter.sendMail({
@@ -39,7 +39,7 @@ class NodemailService {
     public static async resetEmail(email : string){
         try {
             const emailToken = JWTService.generateTokenForEmail(email);
-            const url = `http://localhost:8000/resetpassword/${emailToken}`
+            const url = `${process.env.AWS_URL}/resetpassword/${emailToken}`
 
             await transporter.sendMail({
                 to: email,

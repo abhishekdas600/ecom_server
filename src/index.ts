@@ -70,7 +70,7 @@ app.get("/confirmation/:token", async (req, res) => {
           const token = JWTService.generateTokenForUser(currentUser);
 
 
-          res.status(200).redirect(`http://localhost:3000/confirmation/${token}`)
+          res.status(200).redirect(`${process.env.CLIENT_URL}/confirmation/${token}`)
       } else {
           res.status(400).json({ message: `User not found for ${email}` });
       }
@@ -89,7 +89,7 @@ app.get("/resetpassword/:token", async(req,res)=>{
     })
    if(user){
 
-    res.status(200).redirect(`http://localhost:3000/resetpassword/${token}`)
+    res.status(200).redirect(`${process.env.CLIENT_URL}/resetpassword/${token}`)
 
    }else{
     res.status(404).json({message: "User not found"});
